@@ -133,9 +133,13 @@ int main(int argc, char* argv[]) {
     // Sort MIDI events by time
     midifile.sortTracks();
     
-    // Write MIDI file
+    // Use current time as unique ID
+    time_t timeNow = time(nullptr);
+    
+    // Write MIDI file with unique ID
     string filename = "thread_music_" + to_string(threadCount) + "threads_" + 
-                      to_string(durationSec) + "sec_" + to_string(numPhases) + "phases.mid";
+                      to_string(durationSec) + "sec_" + to_string(numPhases) + "phases_" + 
+                      to_string(timeNow) + ".mid";
     midifile.write(filename);
     
     cout << "MIDI file " << filename << " has been created." << endl;
