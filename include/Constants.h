@@ -6,7 +6,7 @@
 
 // MIDI and Musical Configuration
 const int TPQ = 480;          // Ticks Per Quarter note - higher values enable more precise timing
-const int TEMPO = 180;        // Beats Per Minute - controls playback speed
+const int TEMPO = 160;        // Beats Per Minute - controls playback speed
 const int BEATS_PER_BAR = 4;  // 4/4 time signature
 const int BARS_PER_PHASE = 4; // Musical structure: each phase consists of 4 bars
 
