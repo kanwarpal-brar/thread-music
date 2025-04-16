@@ -78,9 +78,10 @@ You can play this file with any MIDI-compatible software or hardware.
 - Bass parts emphasize root notes and fifths for harmonic stability
 
 ### Rhythm
-- The drum thread provides consistent rhythmic foundation
-- Different phases use different drum patterns (standard, syncopated, half-time)
-- Pattern complexity varies to create musical interest
+- The drum thread provides consistent rhythmic foundation.
+- Different phases use different drum patterns (standard, syncopated, half-time).
+- Pattern complexity varies to create musical interest.
+- Melodic thread phases are aligned to bar boundaries for smoother transitions, while the drum track's phase timing follows the overall duration division.
 
 ### Thread Roles
 1. **Thread 0**: Percussion (MIDI channel 10/9) - provides rhythmic foundation
