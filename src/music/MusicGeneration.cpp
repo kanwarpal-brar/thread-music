@@ -280,7 +280,7 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
         // Update timing
         auto nowWall = std::chrono::high_resolution_clock::now();
         double currentWallTime = std::chrono::duration_cast<std::chrono::milliseconds>(nowWall - startWallTime).count() / 1000.0;
-
+        // TODO: the awakeness check and timestep check all needs to happen atomically to prevent re-deschedule
         // Check if finished
         if (currentWallTime >= durationSec) {
             break;
@@ -349,7 +349,7 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
         int busyWorkAmount = busyWorkDist(gen);
         volatile double sum = 0;
         for (int i = 0; i < busyWorkAmount; i++) {
-            sum += sin(i) * cos(i);
+            sum += sin(i) * cos(i); // TODO: I swear, the compiler better not optimize this out
         }
 
         // Sleep to prevent excessive CPU usage

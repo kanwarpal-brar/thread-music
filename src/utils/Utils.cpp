@@ -11,5 +11,5 @@
  * @return CPU time in seconds as a double
  */
 double getCpuTime() {
-    return static_cast<double>(clock()) / CLOCKS_PER_SEC;
+    return static_cast<double>(clock()) / CLOCKS_PER_SEC;  // thank you xcode
 }
