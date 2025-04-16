@@ -5,7 +5,7 @@
 
 // Musical parameters
 const int TPQ = 480;          // Ticks per quarter note (high resolution)
-const int TEMPO = 120;        // BPM
+const int TEMPO = 200;        // BPM
 const int BEATS_PER_BAR = 4;  // 4/4 time signature
 const int BARS_PER_PHASE = 4; // Each phase is 4 bars long
 
