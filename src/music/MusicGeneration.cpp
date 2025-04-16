@@ -90,8 +90,7 @@ Snippet generateSnippet(int lowNote, int highNote, const std::vector<int>& scale
     else {
         // Start at the root note
         int octave = lowOctave;
-        int rootScale = 0; // Root note in scale
-        
+
         for (int i = 0; i < length; i++) {
             Note note;
             
@@ -197,7 +196,6 @@ DrumPattern generateDrumPattern(int phaseNumber) {
 // Drum thread function (thread 0)
 void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
     // --- Original Phase Length Calculations (No Bar Alignment for Drums) ---
-    double phaseLength = (numPhases > 0) ? static_cast<double>(durationSec) / numPhases : static_cast<double>(durationSec);
     int ticksPerPhase = (numPhases > 0) ? static_cast<int>(durationSec * (TPQ * (TEMPO / 60.0)) / numPhases) : static_cast<int>(durationSec * (TPQ * (TEMPO / 60.0)));
     // Ensure ticksPerPhase is at least 1 if duration is non-zero
     if (durationSec > 0 && ticksPerPhase <= 0) ticksPerPhase = 1;
@@ -210,7 +208,6 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
 
     // Time tracking
     auto startWallTime = std::chrono::high_resolution_clock::now();
-    double lastWallTime = 0;
     int currentPhase = -1;
 
     // Add track name
@@ -222,7 +219,6 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
     // Main loop variables
     int currentTick = 0;
     int currentStep = -1; // Start at -1 so first comparison triggers
-    int noteCount = 0;
 
     // Random number generation
     std::random_device rd;
@@ -261,7 +257,6 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
             midifile.addNoteOn(data.track, phaseEventTick, 9, CRASH, 110);
             // Ensure crash note off doesn't happen before note on
             midifile.addNoteOff(data.track, phaseEventTick + std::max(1, ticksPerStep), 9, CRASH);
-            noteCount++;
 
             currentPhase = newPhase;
         }
@@ -287,14 +282,12 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
             if (pattern.kick[stepPosition]) {
                 midifile.addNoteOn(data.track, stepTick, 9, KICK, pattern.velocities[stepPosition]);
                 midifile.addNoteOff(data.track, stepTick + std::max(1, ticksPerStep - 1), 9, KICK);
-                noteCount++;
             }
 
             // Add snare drum
             if (pattern.snare[stepPosition]) {
                 midifile.addNoteOn(data.track, stepTick, 9, SNARE, pattern.velocities[stepPosition]);
                 midifile.addNoteOff(data.track, stepTick + std::max(1, ticksPerStep - 1), 9, SNARE);
-                noteCount++;
             }
 
             // Add hi-hat
@@ -302,12 +295,8 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
                 int hihat = (stepPosition % 8 == 0) ? OPEN_HAT : CLOSED_HAT;
                 midifile.addNoteOn(data.track, stepTick, 9, hihat, pattern.velocities[stepPosition]);
                 midifile.addNoteOff(data.track, stepTick + std::max(1, ticksPerStep - 1), 9, hihat);
-                noteCount++;
             }
         }
-
-        // Update last time values
-        lastWallTime = currentWallTime;
 
         // Do some busy work to consume CPU cycles
         int busyWorkAmount = busyWorkDist(gen);
@@ -373,7 +362,6 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
     int currentNote = -1;
     int noteStartTick = 0;
     int noteDuration = 0;
-    int noteCount = 0;
     int currentTick = 0; // Declare currentTick outside the loop
 
     // Main loop
@@ -457,7 +445,6 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
                         midifile.addNoteOn(data.track, currentTick, data.channel, currentNote, note->velocity);
                         noteStartTick = currentTick;
                         noteIsOn = true;
-                        noteCount++;
                     }
                 }
             } else {
@@ -493,7 +480,6 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
                         midifile.addNoteOn(data.track, endTick, data.channel, currentNote, note->velocity);
                         noteStartTick = endTick;
                         noteIsOn = true;
-                        noteCount++;
                     } else {
                         noteIsOn = false;
                     }
