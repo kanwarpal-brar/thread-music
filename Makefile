@@ -1,60 +1,35 @@
 # Compiler
 CXX = g++
 
-# C++ Standard
-CPP_STANDARD = -std=c++20
-
-# Include paths
-INCLUDES = -Iexternal/midifile/include
-
-# Compiler flags (add -g for debugging if needed)
-CXXFLAGS = -Wall -Wextra -pedantic $(CPP_STANDARD) $(INCLUDES) -O2
+# Compiler flags
+CXXFLAGS = -std=c++11 -Wall -O2
 
 # Linker flags
-LDFLAGS =
+LDFLAGS = -pthread
 
-# Executable name
-TARGET = music_generator
+# Include paths for midifile library
+INCLUDES = -I./external/midifile/include
 
-# --- Source Files ---
-# Find all .cpp files in the current directory
-PROJECT_SRCS = $(wildcard *.cpp)
+# Midifile library path
+MIDILIB = ./external/midifile/lib/libmidifile.a
 
-# Add Midifile library source files needed for linking
-# (Even if you only *use* headers, these implementations are required)
-MIDIFILE_SRCS = external/midifile/src/MidiFile.cpp \
-                external/midifile/src/MidiEvent.cpp \
-                external/midifile/src/MidiEventList.cpp \
-                external/midifile/src/MidiMessage.cpp \
-                external/midifile/src/Binasc.cpp \
-                external/midifile/src/Options.cpp
+# Main executable
+EXECUTABLE = thread_music
 
-SRCS = $(PROJECT_SRCS) $(MIDIFILE_SRCS)
+# Default target
+all: midifile $(EXECUTABLE)
 
-# Generate object file names from source files
-OBJS = $(SRCS:.cpp=.o)
+# Build midifile library
+midifile:
+	$(MAKE) -C ./external/midifile library
 
-# --- Targets ---
+# Main program
+$(EXECUTABLE): main.cpp midifile
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(MIDILIB) $(LDFLAGS) -o $@
 
-# Default target: build the executable
-all: $(TARGET)
-
-# Rule to link the executable
-$(TARGET): $(OBJS)
-	@echo "Linking executable: $@"
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-	@echo "Build finished: $@"
-
-# Rule to compile source files into object files
-%.o: %.cpp
-	@echo "Compiling $<..."
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Clean target: remove object files and the executable
+# Clean up
 clean:
-	@echo "Cleaning build files..."
-	rm -f $(OBJS) $(TARGET)
-	@echo "Clean finished."
+	rm -f $(EXECUTABLE)
+	$(MAKE) -C ./external/midifile clean
 
-# Phony targets (targets that aren't actual files)
-.PHONY: all clean
+.PHONY: all clean midifile

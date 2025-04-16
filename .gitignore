@@ -1,0 +1,5 @@
+# midi files
+*.mid
+
+# executable
+thread_music
