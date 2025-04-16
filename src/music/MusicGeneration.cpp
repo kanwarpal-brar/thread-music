@@ -1,11 +1,13 @@
 #include "../../include/MusicGeneration.h"
 #include "../../include/Utils.h"
+#include "../../include/Constants.h" // Make sure Constants.h is included
 #include <random>
 #include <cmath>
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <vector> // Include vector for discrete_distribution
 #include <MidiFile.h>
 
 using namespace smf;
@@ -20,13 +22,32 @@ int createNoteInScale(const std::vector<int>& scale, int octave, int scaleIndex,
     return (octave * 12) + rootNote + scale[scaleIndex % scale.size()];
 }
 
+// Helper function to select duration based on weights
+int selectDuration(std::mt19937& gen, const std::map<int, double>& weights) {
+    std::vector<double> weightValues;
+    std::vector<int> durationValues;
+    for (const auto& pair : weights) {
+        if (pair.second > 0) { // Only include durations with positive weight
+            durationValues.push_back(pair.first);
+            weightValues.push_back(pair.second);
+        }
+    }
+
+    if (durationValues.empty()) {
+        return TPQ; // Default to quarter note if no valid weights
+    }
+
+    std::discrete_distribution<> dist(weightValues.begin(), weightValues.end());
+    return durationValues[dist(gen)];
+}
+
 // Generate a snippet for a thread based on range and scale
 Snippet generateSnippet(int lowNote, int highNote, const std::vector<int>& scale, int rootNote, bool isBass) {
     std::random_device rd;
     std::mt19937 gen(rd());
     
     // More consistent snippet lengths
-    std::uniform_int_distribution<> lenDist(4, 8);
+    std::uniform_int_distribution<> lenDist(4, 8); // Keep snippet length similar for now
     int length = lenDist(gen);
     
     Snippet snippet;
@@ -72,12 +93,8 @@ Snippet generateSnippet(int lowNote, int highNote, const std::vector<int>& scale
                 if (octave < highOctave) octave++;
             }
             
-            // Set duration - quarter, half, or whole notes
-            std::uniform_int_distribution<> durDist(0, 2);
-            int durationType = durDist(gen);
-            if (durationType == 0) note.duration = TPQ; // Quarter note
-            else if (durationType == 1) note.duration = TPQ * 2; // Half note
-            else note.duration = TPQ * 4; // Whole note
+            // Set duration using weighted distribution from Constants.h
+            note.duration = selectDuration(gen, MELODY_DURATION_WEIGHTS);
             
             // Set velocity (volume)
             std::uniform_int_distribution<> velDist(80, 110);
@@ -112,9 +129,8 @@ Snippet generateSnippet(int lowNote, int highNote, const std::vector<int>& scale
                 note.pitch = createNoteInScale(scale, octave, scaleIndex, rootNote);
             }
             
-            // Bass often has consistent quarter notes or half notes
-            if (i % 2 == 0) note.duration = TPQ; // Quarter note
-            else note.duration = TPQ * 2; // Half note
+            // Set duration using weighted distribution from Constants.h
+            note.duration = selectDuration(gen, BASS_DURATION_WEIGHTS);
             
             // Bass usually has consistent velocity
             note.velocity = 100;
@@ -196,9 +212,11 @@ DrumPattern generateDrumPattern(int phaseNumber) {
 // Drum thread function (thread 0)
 void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
     // --- Original Phase Length Calculations (No Bar Alignment for Drums) ---
+    // Correctly uses TPQ and TEMPO
     int ticksPerPhase = (numPhases > 0) ? static_cast<int>(durationSec * (TPQ * (TEMPO / 60.0)) / numPhases) : static_cast<int>(durationSec * (TPQ * (TEMPO / 60.0)));
     // Ensure ticksPerPhase is at least 1 if duration is non-zero
     if (durationSec > 0 && ticksPerPhase <= 0) ticksPerPhase = 1;
+    // Correctly uses TPQ and TEMPO
     int totalTicks = static_cast<int>(durationSec * (TPQ * (TEMPO / 60.0))); // Use original total ticks
 
     // Calculate ticks per bar and step for pattern generation
@@ -237,6 +255,7 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
         }
 
         // Calculate current MIDI tick position based on wall time
+        // Correctly uses TPQ and TEMPO
         currentTick = static_cast<int>(currentWallTime * (TPQ * (TEMPO / 60.0)));
 
         // Check for phase change based on original ticks per phase
@@ -322,6 +341,7 @@ void drumThreadFunction(ThreadData data, int durationSec, int numPhases) {
 // Melodic thread function for all threads except the drum thread
 void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
     // --- Phase and Bar Alignment Calculations ---
+    // Correctly uses TPQ and TEMPO
     int ticksPerBar = BEATS_PER_BAR * TPQ;
     double initialTotalTicks = durationSec * (TPQ * (TEMPO / 60.0));
     double initialTicksPerPhase = (numPhases > 0) ? initialTotalTicks / numPhases : initialTotalTicks;
@@ -337,6 +357,7 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
     if (adjustedTicksPerPhase < 0) adjustedTicksPerPhase = 0;
 
     int adjustedTotalTicks = adjustedTicksPerPhase * numPhases;
+    // Correctly uses TPQ and TEMPO
     double adjustedDurationSec = (TPQ > 0 && TEMPO > 0) ? adjustedTotalTicks / (TPQ * (TEMPO / 60.0)) : 0.0;
 
     // Time tracking
@@ -394,6 +415,7 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
         bool isScheduled = (schedulingRatio > SCHEDULE_THRESHOLD);
 
         // Convert current wall time to tick for MIDI events
+        // Correctly uses TPQ and TEMPO
         currentTick = static_cast<int>(currentWallTime * (TPQ * (TEMPO / 60.0))); // Assign value inside loop
 
         // Check for phase change based on adjusted ticks per phase
