@@ -1,35 +1,30 @@
-# Compiler
-CXX = g++
+# Thread Music Generator Makefile
+# This Makefile compiles the Thread Music Generator project
 
-# Compiler flags
-CXXFLAGS = -std=c++11 -Wall -O2
+# Compiler configuration
+CXX = g++                       # C++ compiler
+CXXFLAGS = -std=c++17 -Wall -O2 # Language standard, warnings, and optimization
+LDFLAGS = -pthread              # Link with pthread library for thread support
 
-# Linker flags
-LDFLAGS = -pthread
-
-# Include paths for header files
-INCLUDES = -I./external/midifile/include -I./include
-
-# Library paths
-LIBPATHS = -L./external/midifile/lib
-
-# Libraries to link
-LIBS = -lmidifile
+# Include and library paths
+INCLUDES = -I./external/midifile/include -I./include  # Header include paths
+LIBPATHS = -L./external/midifile/lib                  # Library paths
+LIBS = -lmidifile                                     # External MIDI library
 
 # Source files
 SOURCES = main.cpp src/music/MusicGeneration.cpp src/utils/Utils.cpp
 
-# Main executable
+# Output executable
 EXECUTABLE = thread_music
 
 # Default target
 all: $(EXECUTABLE)
 
-# Main program
+# Main program build rule
 $(EXECUTABLE): $(SOURCES)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
 
-# Clean up
+# Clean up build artifacts
 clean:
 	rm -f $(EXECUTABLE)
 
