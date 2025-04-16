@@ -353,6 +353,7 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
     // Time tracking
     auto startWallTime = std::chrono::high_resolution_clock::now();
     double lastWallTime = 0;
+    double lastCpuTime = getCpuTime();
     int currentPhase = -1;
 
     // Add track name
@@ -373,12 +374,14 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
     int noteStartTick = 0;
     int noteDuration = 0;
     int noteCount = 0;
+    int currentTick = 0; // Declare currentTick outside the loop
 
     // Main loop
     while (running) {
         // Get current times
         auto nowWall = std::chrono::high_resolution_clock::now();
         double currentWallTime = std::chrono::duration_cast<std::chrono::milliseconds>(nowWall - startWallTime).count() / 1000.0;
+        double currentCpuTime = getCpuTime();
 
         // Check if duration has elapsed (use adjusted duration)
         if (currentWallTime >= adjustedDurationSec) {
@@ -394,9 +397,16 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
 
         // Calculate time deltas
         double wallTimeDelta = currentWallTime - lastWallTime;
+        double cpuTimeDelta = currentCpuTime - lastCpuTime;
+
+        // Calculate scheduling ratio
+        double schedulingRatio = (wallTimeDelta > 0) ? cpuTimeDelta / wallTimeDelta : 0;
+
+        // Determine if thread is scheduled
+        bool isScheduled = (schedulingRatio > SCHEDULE_THRESHOLD);
 
         // Convert current wall time to tick for MIDI events
-        int currentTick = static_cast<int>(currentWallTime * (TPQ * (TEMPO / 60.0)));
+        currentTick = static_cast<int>(currentWallTime * (TPQ * (TEMPO / 60.0))); // Assign value inside loop
 
         // Check for phase change based on adjusted ticks per phase
         int newPhase = (adjustedTicksPerPhase > 0) ? (currentTick / adjustedTicksPerPhase) : 0;
@@ -431,22 +441,73 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
         }
 
         // Handle scheduling transitions
-        if (currentPhase >= 0 && currentPhase < data.snippets.size()) {
-            Snippet& snippet = data.snippets[currentPhase % data.snippets.size()];
-            Note* note = snippet.getNextNote();
+        if (isScheduled != wasScheduled) {
+            std::lock_guard<std::mutex> lock(midi_mutex);
 
-            if (note) {
-                currentNote = note->pitch;
-                noteDuration = note->duration;
-                midifile.addNoteOn(data.track, currentTick, data.channel, currentNote, note->velocity);
-                noteStartTick = currentTick;
-                noteIsOn = true;
-                noteCount++;
+            if (isScheduled) {
+                // Thread was just scheduled - start a note from the snippet
+                int nextPhaseTick = (currentPhase + 1) * adjustedTicksPerPhase;
+                if (!noteIsOn && currentPhase >= 0 && currentPhase < data.snippets.size() && (adjustedTicksPerPhase == 0 || currentTick < nextPhaseTick)) {
+                    Snippet& snippet = data.snippets[currentPhase % data.snippets.size()];
+                    Note* note = snippet.getNextNote();
+
+                    if (note) {
+                        currentNote = note->pitch;
+                        noteDuration = note->duration;
+                        midifile.addNoteOn(data.track, currentTick, data.channel, currentNote, note->velocity);
+                        noteStartTick = currentTick;
+                        noteIsOn = true;
+                        noteCount++;
+                    }
+                }
+            } else {
+                // Thread was just descheduled - end the note
+                if (noteIsOn) {
+                    int nextPhaseTick = (currentPhase + 1) * adjustedTicksPerPhase;
+                    int endTick = (adjustedTicksPerPhase > 0 && currentTick >= nextPhaseTick) ? nextPhaseTick : currentTick;
+                    midifile.addNoteOff(data.track, endTick, data.channel, currentNote);
+                    noteIsOn = false;
+                }
+            }
+
+            wasScheduled = isScheduled;
+        }
+        // Check if we need to move to the next note in the snippet
+        else if (isScheduled && noteIsOn && currentTick - noteStartTick >= noteDuration) {
+            std::lock_guard<std::mutex> lock(midi_mutex);
+
+            int intendedEndTick = noteStartTick + noteDuration;
+            int nextPhaseTick = (currentPhase + 1) * adjustedTicksPerPhase;
+            int endTick = (adjustedTicksPerPhase > 0 && intendedEndTick >= nextPhaseTick) ? nextPhaseTick : intendedEndTick;
+
+            midifile.addNoteOff(data.track, endTick, data.channel, currentNote);
+
+            if (adjustedTicksPerPhase == 0 || endTick < nextPhaseTick) {
+                if (currentPhase >= 0 && currentPhase < data.snippets.size()) {
+                    Snippet& snippet = data.snippets[currentPhase % data.snippets.size()];
+                    Note* note = snippet.getNextNote();
+
+                    if (note) {
+                        currentNote = note->pitch;
+                        noteDuration = note->duration;
+                        midifile.addNoteOn(data.track, endTick, data.channel, currentNote, note->velocity);
+                        noteStartTick = endTick;
+                        noteIsOn = true;
+                        noteCount++;
+                    } else {
+                        noteIsOn = false;
+                    }
+                } else {
+                    noteIsOn = false;
+                }
+            } else {
+                noteIsOn = false;
             }
         }
 
         // Update last time values
         lastWallTime = currentWallTime;
+        lastCpuTime = currentCpuTime;
 
         // Do some busy work to consume CPU cycles
         int busyWorkAmount = busyWorkDist(gen);
@@ -457,5 +518,15 @@ void melodicThreadFunction(ThreadData data, int durationSec, int numPhases) {
 
         // Sleep to prevent CPU hogging
         std::this_thread::sleep_for(std::chrono::milliseconds(THREAD_SLEEP_MS));
+    }
+
+    // Add a final marker at the originally requested end time
+    {
+        std::lock_guard<std::mutex> lock(midi_mutex);
+        int alignedEndTick = adjustedTotalTicks; // Use the calculated aligned end tick
+        // Ensure the marker is placed at or after the last calculated tick if loop exited early
+        // Use alignedEndTick as the primary reference point for melodic tracks.
+        int finalMarkerTick = std::max(currentTick, alignedEndTick); // Now currentTick is in scope
+        midifile.addMarker(data.track, finalMarkerTick, "Aligned End"); // Changed marker name for clarity
     }
 }
